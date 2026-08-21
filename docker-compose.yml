@@ -34,7 +34,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://migrator:${MIGRATOR_DB_PASSWORD:-migration_internal_password_change_me}@migration-db:5432/migrator
+      DATABASE_URL: postgresql://admin:nije,kikiriki@postgres:5432/migratormigrator
       MIGRATOR_SECRET: ${MIGRATOR_SECRET:-replace-with-a-long-random-secret}
     networks:
       - migration-internal

@@ -10,7 +10,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 # Build-time placeholder only; the real URL is supplied by docker-compose.
-ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
+ENV DATABASE_URL=postgresql://admin:nije,kikiriki@postgres:5432/migrator
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY next.config.ts postcss.config.mjs tsconfig.json ./
