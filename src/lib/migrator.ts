@@ -1,7 +1,5 @@
 import type { Client } from "pg";
-import { db } from "@/db";
-import { migrationRuns, migrationTableResults } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { addRun, addTableResult, updateRun } from "./store";
 import { connectMySql, streamMySqlTable, countMySqlRows } from "./mysql";
 import { connectPg, qualified, quoteIdent, resetSequence } from "./pg";
 import { coerceValue } from "./plan";
@@ -100,13 +98,17 @@ export async function runMigration(
   let triggersDisabled = false;
 
   try {
-    await db.insert(migrationRuns).values({
+    await addRun({
       id: job.id,
       status: "running",
       sourceLabel: job.sourceLabel,
       targetLabel: job.targetLabel,
       options,
       totalTables: plans.length,
+      totalRowsRead: 0,
+      totalRowsWritten: 0,
+      totalRowsFailed: 0,
+      errorMessage: null,
     });
   } catch {
     /* history is best-effort */
@@ -296,7 +298,7 @@ export async function runMigration(
         );
 
         try {
-          await db.insert(migrationTableResults).values({
+          await addTableResult({
             runId: job.id,
             sourceTable: plan.sourceTable,
             targetTable: plan.targetTable,
@@ -370,17 +372,14 @@ export async function runMigration(
       { read: 0, written: 0, failed: 0 },
     );
     try {
-      await db
-        .update(migrationRuns)
-        .set({
-          status: job.status,
-          totalRowsRead: totals.read,
-          totalRowsWritten: totals.written,
-          totalRowsFailed: totals.failed,
-          errorMessage: job.error,
-          finishedAt: new Date(),
-        })
-        .where(eq(migrationRuns.id, job.id));
+      await updateRun(job.id, {
+        status: job.status,
+        totalRowsRead: totals.read,
+        totalRowsWritten: totals.written,
+        totalRowsFailed: totals.failed,
+        errorMessage: job.error,
+        finishedAt: new Date().toISOString(),
+      });
     } catch {
       /* history is best-effort */
     }

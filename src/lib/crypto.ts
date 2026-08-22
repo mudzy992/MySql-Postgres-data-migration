@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 
 const SECRET =
-  process.env.MIGRATOR_SECRET ??
-  process.env.DATABASE_URL ??
-  "arena-mysql-to-postgres-migrator-dev-secret";
+  process.env.MIGRATOR_SECRET ?? "arena-mysql-to-postgres-migrator-dev-secret";
 
 const KEY = crypto.createHash("sha256").update(SECRET).digest();
 

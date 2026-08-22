@@ -1,43 +1,25 @@
 services:
-  migration-db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: migrator
-      POSTGRES_USER: migrator
-      POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:-migration_internal_password_change_me}
-    volumes:
-      - migration_db_data:/var/lib/postgresql/data
-    networks:
-      - migration-internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U migrator -d migrator"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   migration-app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
-    depends_on:
-      migration-db:
-        condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://admin:nije,kikiriki@postgres:5432/migratormigrator
+      # Secret used to encrypt saved connection-profile passwords.
+      # Change this to a long random string in production (see README.md).
       MIGRATOR_SECRET: ${MIGRATOR_SECRET:-replace-with-a-long-random-secret}
+      # Location of the JSON store (profiles + migration history).
+      STORE_PATH: /data/store.json
+      # Optional: only needed if you want to use the "Engine self-test"
+      # button in the UI — point it at ANY throwaway PostgreSQL database.
+      # DATABASE_URL: postgresql://user:pass@host:5432/testdb
+    volumes:
+      # Persist profiles + history across container recreation.
+      # Remove this volume (and the entry) if you want them ephemeral.
+      - migration_store:/data
     networks:
-      - migration-internal
       - web
     security_opt:
       - no-new-privileges:true
@@ -63,11 +45,9 @@ services:
         max-file: "3"
 
 volumes:
-  migration_db_data:
+  migration_store:
 
 networks:
-  migration-internal:
-    internal: true
   web:
     external: true
     name: web

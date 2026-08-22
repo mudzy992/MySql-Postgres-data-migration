@@ -9,8 +9,6 @@ RUN npm ci
 FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-# Build-time placeholder only; the real URL is supplied by docker-compose.
-ENV DATABASE_URL=postgresql://admin:nije,kikiriki@postgres:5432/migrator
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY next.config.ts postcss.config.mjs tsconfig.json ./
@@ -23,22 +21,23 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Profiles and migration history live in this JSON file (mount a volume here
+# if you want them to survive container recreation).
+ENV STORE_PATH=/data/store.json
 
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 --ingroup nodejs nextjs
+    && adduser --system --uid 1001 --ingroup nodejs nextjs \
+    && mkdir -p /data && chown nextjs:nodejs /data
 
-# Keep node_modules because drizzle-kit initializes the application's metadata
-# tables on first boot before Next.js starts.
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./package-lock.json
-COPY --from=builder --chown=nextjs:nodejs /app/src/db/schema.ts ./src/db/schema.ts
 
 USER nextjs
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1
 
-CMD ["sh", "-c", "npx drizzle-kit push --dialect postgresql --schema ./src/db/schema.ts --url \"$DATABASE_URL\" --force && exec npm run start"]
+CMD ["npm", "run", "start"]

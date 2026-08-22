@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { connectionProfiles } from "@/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { errorMessage } from "@/lib/request";
+import { addProfile, deleteProfile, listProfiles } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const rows = await db
-      .select()
-      .from(connectionProfiles)
-      .orderBy(desc(connectionProfiles.createdAt));
+    const rows = await listProfiles();
     return NextResponse.json({
       ok: true,
       profiles: rows.map((r) => ({
@@ -22,7 +17,7 @@ export async function GET() {
         kind: r.kind,
         host: r.host,
         port: r.port,
-        user: r.username,
+        user: r.user,
         password: decryptSecret(r.passwordEnc),
         database: r.database,
         schema: r.schemaName ?? "public",
@@ -53,22 +48,19 @@ export async function POST(request: Request) {
     const cfg = body.config ?? {};
     const name = (body.name ?? "").trim() || `${kind} · ${cfg.database ?? "db"}`;
 
-    const [row] = await db
-      .insert(connectionProfiles)
-      .values({
-        name,
-        kind,
-        host: cfg.host ?? "127.0.0.1",
-        port: Number(cfg.port ?? (kind === "mysql" ? 3306 : 5432)),
-        username: cfg.user ?? "",
-        passwordEnc: encryptSecret(cfg.password ?? ""),
-        database: cfg.database ?? "",
-        schemaName: kind === "postgres" ? (cfg.schema ?? "public") : null,
-        ssl: Boolean(cfg.ssl),
-      })
-      .returning();
+    const row = await addProfile({
+      name,
+      kind,
+      host: cfg.host ?? "127.0.0.1",
+      port: Number(cfg.port ?? (kind === "mysql" ? 3306 : 5432)),
+      user: cfg.user ?? "",
+      passwordEnc: encryptSecret(cfg.password ?? ""),
+      database: cfg.database ?? "",
+      schemaName: kind === "postgres" ? (cfg.schema ?? "public") : null,
+      ssl: Boolean(cfg.ssl),
+    });
 
-    return NextResponse.json({ ok: true, id: row?.id });
+    return NextResponse.json({ ok: true, id: row.id });
   } catch (error) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
   }
@@ -83,7 +75,7 @@ export async function DELETE(request: Request) {
     if (!Number.isFinite(id)) {
       return NextResponse.json({ ok: false, error: "Invalid id." }, { status: 400 });
     }
-    await db.delete(connectionProfiles).where(eq(connectionProfiles.id, id));
+    await deleteProfile(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 500 });
